@@ -13,7 +13,9 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("folder.select", "Go to Folder", "Folder", select)
             .pure()
             .key("Mod+Y")
-            .params(r#"{"id": number} | {"kind": "inbox"|"drafts"|"sent"|"deleted"|"junk"|"archive"|"outbox", "account"?: number} | {"path": "Inbox/Projects"}"#),
+            .params(
+                r#"{"id": number} | {"kind": "inbox"|"drafts"|"sent"|"deleted"|"junk"|"archive"|"outbox", "account"?: number} | {"path": "Inbox/Projects"} | {"unified": "inbox"|"drafts"|"sent"|"deleted"|"junk"|"archive"|"outbox"} (every account's folder of that kind merged into one list; {"allInboxes": true} means {"unified": "inbox"})"#,
+            ),
         CommandSpec::new("folder.list", "List Folders", "Folder", list).pure().params(
             r#"{} — every account's folder tree with each folder's messages and unread, and for each account its own "unread" (a shared mailbox's are on its own entry, with "sharedOf": the account it is opened through, and never added to that account's), "favoritesFrom", and "favorites": what the pane lists under Favorites, in its order"#,
         ),
@@ -99,7 +101,14 @@ pub const FROM_OUTLOOK: &str =
     "This account's Favorites come from Outlook and are changed there (File › Options can show the ones kept in MailCraft instead)";
 
 fn can_empty(s: &Session) -> Option<&'static str> {
-    if s.mailbox.count(s.view.folder) == 0 { Some("the folder is already empty") } else { None }
+    if s.view.unified.is_some() {
+        // A Unified view is a view over many folders: emptying "it" would surprise.
+        Some("go to one folder to empty it")
+    } else if s.mailbox.count(s.view.folder) == 0 {
+        Some("the folder is already empty")
+    } else {
+        None
+    }
 }
 
 fn target(s: &Session, v: &Value) -> Result<Id, CmdError> {
@@ -119,6 +128,37 @@ fn by_path(s: &Session, account: Option<Id>, path: &str) -> Option<Id> {
 }
 
 fn select(s: &mut Session, v: &Value) -> CmdResult {
+    // A Unified view: every account's folder of one kind merged. The folder in view stays a
+    // real folder of that kind (the default account's, else any Inbox) for everything that
+    // wants one (where a new folder goes, which account composes).
+    let unified = match (p::str(v, "unified"), p::bool(v, "allInboxes")) {
+        (Some(code), _) => Some(
+            FolderKind::parse(code)
+                .filter(|k| *k != FolderKind::Custom)
+                .ok_or_else(|| bad("`unified` is inbox, drafts, sent, deleted, junk, archive or outbox"))?,
+        ),
+        (None, Some(true)) => Some(FolderKind::Inbox),
+        _ => None,
+    };
+    if let Some(kind) = unified {
+        let anchor = s
+            .mailbox
+            .default_account()
+            .and_then(|a| s.mailbox.folder_of_kind(a.id, kind))
+            .or_else(|| s.mailbox.inbox())
+            .ok_or_else(|| fail("add an account first"))?;
+        if s.view.unified != Some(kind) || s.view.module != Module::Mail {
+            s.view.unified = Some(kind);
+            s.view.folder = anchor;
+            s.view.module = Module::Mail;
+            s.sel.messages.clear();
+        }
+        s.view.search.clear();
+        let folders = crate::list::unified_folders(&s.mailbox, kind);
+        let messages: usize = folders.iter().map(|f| s.mailbox.count(*f)).sum();
+        let unread: usize = folders.iter().map(|f| s.mailbox.unread_count(*f)).sum();
+        return Ok(json!({"unified": kind.code(), "folder": anchor, "messages": messages, "unread": unread}));
+    }
     let account = p::id(v, "account");
     let id = if let Some(id) = p::id(v, "id") {
         s.mailbox.folder(id).map(|f| f.id).ok_or_else(|| failed!("no folder with id {id}", id))?
@@ -133,9 +173,10 @@ fn select(s: &mut Session, v: &Value) -> CmdResult {
     } else {
         return Err(bad("`id`, `kind` or `path` is required"));
     };
-    if s.view.folder != id || s.view.module != Module::Mail {
+    if s.view.folder != id || s.view.module != Module::Mail || s.view.unified.is_some() {
         s.view.folder = id;
         s.view.module = Module::Mail;
+        s.view.unified = None;
         s.sel.messages.clear();
     }
     // A search belongs to the folder it was typed in.
@@ -186,7 +227,7 @@ fn list(s: &mut Session, _: &Value) -> CmdResult {
             entry
         })
         .collect();
-    Ok(json!({"accounts": accounts, "current": s.view.folder, "favorites": favorites(s)}))
+    Ok(json!({"accounts": accounts, "current": s.view.folder, "unified": s.view.unified.map(FolderKind::code), "favorites": favorites(s)}))
 }
 
 fn new(s: &mut Session, v: &Value) -> CmdResult {

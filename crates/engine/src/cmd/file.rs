@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("file.exportContacts", "Export Contacts", "File › Open & Export", export_contacts).pure().params(r#"{"ids"?: [number], "path"?: string} — .vcf"#),
         CommandSpec::new("file.info", "Info", "File › Info", info).pure(),
         CommandSpec::new("file.options", "Options", "File", options).pure().params(
-            r#"{"twelveHour"?: bool, "weekStart"?: "sun"|"mon"|…, "workDays"?: ["mon",…], "workStart"?: 0-23, "workEnd"?: 1-24, "markReadOnOpen"?: bool, "defaultReminder"?: minutes | null, "quoteOnReply"?: bool, "previewLines"?: 0-3, "syncLimit"?: number, "syncMinutes"?: 0-1440 (0: only when asked)}"#,
+            r#"{"twelveHour"?: bool, "weekStart"?: "sun"|"mon"|…, "workDays"?: ["mon",…], "workStart"?: 0-23, "workEnd"?: 1-24, "markReadOnOpen"?: bool, "defaultReminder"?: minutes | null, "quoteOnReply"?: bool, "previewLines"?: 0-3, "syncLimit"?: number, "syncMinutes"?: 0-1440 (0: only when asked), "hideFavorites"?: bool (leave the Favorites section out of the folder pane)}"#,
         ),
     ]
 }
@@ -343,6 +343,9 @@ fn options(s: &mut Session, v: &Value) -> CmdResult {
     }
     if let Some(b) = p::bool(v, "markReadOnOpen") {
         prefs.mark_read_on_open = b;
+    }
+    if let Some(b) = p::bool(v, "hideFavorites") {
+        prefs.hide_favorites = b;
     }
     match v.get("defaultReminder") {
         Some(Value::Null) => prefs.default_reminder = None,

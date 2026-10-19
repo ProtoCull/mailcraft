@@ -2763,6 +2763,10 @@ impl MailApp {
         let account =
             self.session.mailbox.folder(self.session.view.folder).and_then(|f| self.session.mailbox.account(f.account)).map(|a| a.name.clone());
         match self.session.view.module {
+            Module::Mail if self.session.view.unified.is_some() => {
+                let kind = self.session.view.unified.unwrap_or_default();
+                i18n::fmt(tl!("{folder} - {mailbox}"), &[("folder", kind.default_name()), ("mailbox", tl!("Unified"))])
+            }
             Module::Mail => {
                 let folder = self.session.mailbox.folder(self.session.view.folder).map_or(tl!("Mail"), crate::nav::folder_name);
                 match account.filter(|a| !a.is_empty()) {

@@ -307,6 +307,46 @@ fn folder_row(app: &mut MailApp, ui: &mut Ui, f: &Folder, depth: usize, has_chil
     });
 }
 
+/// The id the Unified heading is folded under in `UiState::collapsed_folders`: no allocated id
+/// reaches it (they count up from one).
+const UNIFIED: Id = Id::MAX;
+
+/// One row of the Unified section: every account's folder of `kind` as one list. `selected`
+/// while that is the view; its count is those folders' together, said as the kind says it.
+fn unified_row(app: &mut MailApp, ui: &mut Ui, kind: FolderKind, index: u64, count: Count, selected: bool) {
+    let t = Tokens::get(ui.ctx());
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
+    let resp = ui.interact(r, ui.id().with(("unified", kind.code())), Sense::click());
+    app.hit.add("unified", index, r);
+    let row = highlight(r);
+    if selected {
+        ui.painter().rect_filled(row, 0.0, t.selection);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(row, 0.0, t.panel.lerp_to_gamma(t.hover, 0.7));
+    }
+    let y = r.center().y - TEXT_RISE;
+    let mut name_end = r.max.x - COUNT_RIGHT;
+    if count != Count::Nothing {
+        let font = if matches!(count, Count::Unread(_)) { bold(NAME_SIZE) } else { regular(NAME_SIZE) };
+        let shown = ui.painter().text(pos2(r.max.x - COUNT_RIGHT, y), Align2::RIGHT_CENTER, count.text(), font, t.accent);
+        name_end = shown.min.x - 8.0;
+    }
+    let font = if selected { bold(NAME_SIZE) } else { regular(NAME_SIZE) };
+    paint_clipped(ui.painter(), pos2(r.min.x + NAME_LEFT, y), (name_end - r.min.x - NAME_LEFT).max(0.0), kind.default_name(), font, t.text);
+    if resp.clicked() {
+        let _ = app.run("folder.select", json!({"unified": kind.code()}));
+    }
+    resp.context_menu(|ui| {
+        ui.set_min_width(190.0);
+        if ui.add(egui::Button::new(tl!("Mark All as Read")).min_size(vec2(180.0, 0.0))).clicked() {
+            // The merged list's own command: every account's folder of this kind.
+            let _ = app.run("folder.select", json!({"unified": kind.code()}));
+            let _ = app.run("mail.markAllRead", json!({}));
+            ui.close();
+        }
+    });
+}
+
 /// A sentence under the Favorites heading that is longer than a row: wrapped to the pane, three
 /// rows at most, in the quiet colour. Where it was put.
 fn quiet_lines(ui: &mut Ui, text: &str) -> Rect {
@@ -513,8 +553,10 @@ pub fn folder_pane(app: &mut MailApp, ui: &mut Ui) {
                 })
                 .collect();
             // The folder in view is highlighted once: under Favorites when it shows there, unless
-            // it was picked in its account's list and shows there too.
-            let current = app.session.view.folder;
+            // it was picked in its account's list and shows there too. While a Unified view is
+            // on, its own row carries the highlight and no folder does.
+            let unified = app.session.view.unified;
+            let current = if unified.is_some() { 0 } else { app.session.view.folder };
             let among_favorites = !folded.contains(&FAVORITES) && favorites.iter().any(|f| f.id == current);
             let in_a_list = lists.iter().any(|(_, _, rows)| rows.iter().any(|(f, _, _)| f.id == current));
             let favorite_selected = among_favorites && !(in_a_list && picked_in_list(ui));
@@ -528,7 +570,22 @@ pub fn folder_pane(app: &mut MailApp, ui: &mut Ui) {
                     heading(app, ui, id, name, 2.0 * ROW_H, 34.5, true)
                 }
             };
-            if (!favorites.is_empty() || note.is_some()) && head(app, ui, FAVORITES, tl!("Favorites")) {
+            // The Unified section: every account's folder of each standard kind as one list, at
+            // the top, once there are two accounts to merge (with one, each row is that
+            // account's folder under another name).
+            if app.session.mailbox.accounts.iter().filter(|a| !a.is_shared()).count() >= 2 && head(app, ui, UNIFIED, tl!("Unified")) {
+                for (i, kind) in
+                    [FolderKind::Inbox, FolderKind::Drafts, FolderKind::Sent, FolderKind::Deleted, FolderKind::Outbox].into_iter().enumerate()
+                {
+                    let folders = mailcraft_engine::list::unified_folders(&app.session.mailbox, kind);
+                    let (total, unread) = folders
+                        .iter()
+                        .filter_map(|id| counts.get(id))
+                        .fold((0usize, 0usize), |(t, u), (ft, fu)| (t.saturating_add(*ft), u.saturating_add(*fu)));
+                    unified_row(app, ui, kind, i as u64, Count::of(kind, total, unread), unified == Some(kind));
+                }
+            }
+            if !app.session.prefs.hide_favorites && (!favorites.is_empty() || note.is_some()) && head(app, ui, FAVORITES, tl!("Favorites")) {
                 if let Some((account, note)) = &note {
                     favorites_note(app, ui, *account, note);
                 }

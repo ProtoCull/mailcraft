@@ -456,6 +456,14 @@ fn options(app: &mut MailApp, ui: &mut Ui, t: &Tokens) {
                 }
             });
     });
+    let mut show_favorites = !prefs.hide_favorites;
+    if ui
+        .checkbox(&mut show_favorites, tl!("Show the Favorites section in the folder pane"))
+        .on_hover_text(tl!("Without it, the pane starts at the Unified section (with two accounts or more) and the accounts."))
+        .changed()
+    {
+        set(app, json!({"hideFavorites": !show_favorites}));
+    }
     // (Whose Favorites the folder pane shows, for an account that signs in with Microsoft.)
     crate::favorites_sync::options(app, ui, t);
     // Where the system can show them (not in the browser).

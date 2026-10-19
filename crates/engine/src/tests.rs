@@ -2284,3 +2284,123 @@ fn a_windows_1250_contact_file_keeps_its_letters() {
     let c = s.mailbox.contact(s.sel.contact.unwrap()).unwrap();
     assert_eq!((c.display_name.as_str(), c.last.as_str(), c.company.as_str()), ("Ivana Gvođćič", "Gvođćič", "Škola češće"));
 }
+
+/// A second account beside the sample's, with one unread message in its Inbox and one in its
+/// Sent. The ids of the account, the Inbox message and the Sent message.
+fn with_second_account(s: &mut Session) -> (Id, Id, Id) {
+    let b = s.mailbox.add_account(mailcraft_model::Account {
+        name: "Harborworks".into(),
+        email: "avery@harborworks.example".into(),
+        ..Default::default()
+    });
+    let message = |folder| mailcraft_model::Message {
+        folder,
+        from: mailcraft_model::Address::new("Lin Zhao", "lin.zhao@harborworks.example"),
+        to: vec![mailcraft_model::Address::new("Avery Quinn", "avery@harborworks.example")],
+        subject: "Harbor contract".into(),
+        date: now(),
+        received: now(),
+        ..Default::default()
+    };
+    let inbox = s.mailbox.folder_of_kind(b, FolderKind::Inbox).unwrap();
+    let sent = s.mailbox.folder_of_kind(b, FolderKind::Sent).unwrap();
+    let in_inbox = s.mailbox.add_message(message(inbox)).unwrap();
+    let in_sent = s.mailbox.add_message(message(sent)).unwrap();
+    s.mailbox_changed();
+    (b, in_inbox, in_sent)
+}
+
+#[test]
+fn a_unified_inbox_merges_every_accounts_inbox() {
+    let mut s = session();
+    let one_inbox = s.rows().len();
+    let unread_here = s.mailbox.unread_count(s.view.folder);
+    let (_, in_inbox, in_sent) = with_second_account(&mut s);
+    // `allInboxes` is the older spelling of `{"unified": "inbox"}` and still works.
+    let r = run(&mut s, "folder.select", json!({"allInboxes": true}));
+    assert_eq!(r["unified"], "inbox");
+    // Both accounts' unread, and only Inbox mail: the Sent message stays out.
+    assert_eq!(r["unread"], json!(unread_here + 1));
+    let rows = s.rows();
+    assert_eq!(rows.len(), one_inbox + 1);
+    assert!(rows.iter().any(|row| row.id == in_inbox));
+    assert!(!rows.iter().any(|row| row.id == in_sent));
+    // The folder in view stays a real Inbox, for everything that wants one.
+    assert_eq!(s.view.folder, kind(&s, FolderKind::Inbox));
+    assert_eq!(s.view.unified, Some(FolderKind::Inbox));
+    // A view saved before Unified views existed opens as it was.
+    assert!(serde_json::from_value::<ViewState>(json!({})).unwrap().unified.is_none());
+}
+
+#[test]
+fn every_standard_kind_has_a_unified_view() {
+    let mut s = session();
+    let (b, _, in_sent) = with_second_account(&mut s);
+    // Unified Sent Items holds both accounts' sent mail.
+    let r = run(&mut s, "folder.select", json!({"unified": "sent"}));
+    assert_eq!(r["unified"], "sent");
+    assert_eq!(s.view.folder, kind(&s, FolderKind::Sent));
+    assert!(s.rows().iter().any(|row| row.id == in_sent));
+    // Unified Deleted Items takes in what either account deletes.
+    run(&mut s, "mail.delete", json!({"id": in_sent}));
+    run(&mut s, "folder.select", json!({"unified": "deleted"}));
+    assert_eq!(s.mailbox.message(in_sent).unwrap().folder, s.mailbox.folder_of_kind(b, FolderKind::Deleted).unwrap());
+    assert!(s.rows().iter().any(|row| row.id == in_sent));
+    // And a kind that isn't one is refused.
+    assert!(s.run("folder.select", &json!({"unified": "custom"})).is_err());
+    assert!(s.run("folder.select", &json!({"unified": "attic"})).is_err());
+}
+
+#[test]
+fn the_favorites_section_can_be_left_out() {
+    let mut s = session();
+    assert!(!s.prefs.hide_favorites);
+    run(&mut s, "file.options", json!({"hideFavorites": true}));
+    assert!(s.prefs.hide_favorites);
+    run(&mut s, "file.options", json!({"hideFavorites": false}));
+    assert!(!s.prefs.hide_favorites);
+}
+
+#[test]
+fn acting_in_a_unified_view_reaches_each_messages_own_account() {
+    let mut s = session();
+    let (b, in_inbox, _) = with_second_account(&mut s);
+    run(&mut s, "folder.select", json!({"unified": "inbox"}));
+    let anchor = s.view.folder;
+    // Selecting a message of the other account keeps the merged list: no jump to its folder.
+    run(&mut s, "mail.select", json!({"id": in_inbox}));
+    assert_eq!(s.view.unified, Some(FolderKind::Inbox));
+    assert_eq!(s.view.folder, anchor);
+    // Deleting it goes to its own account's Deleted Items, not the anchor's.
+    run(&mut s, "mail.delete", json!({"id": in_inbox}));
+    let deleted_b = s.mailbox.folder_of_kind(b, FolderKind::Deleted).unwrap();
+    assert_eq!(s.mailbox.message(in_inbox).unwrap().folder, deleted_b);
+    assert!(!s.rows().iter().any(|row| row.id == in_inbox));
+}
+
+#[test]
+fn a_unified_view_marks_every_folder_of_its_kind_and_nothing_else() {
+    let mut s = session();
+    let unread_here = s.mailbox.unread_count(s.view.folder);
+    let (_, _, in_sent) = with_second_account(&mut s);
+    run(&mut s, "folder.select", json!({"unified": "inbox"}));
+    let r = run(&mut s, "mail.markAllRead", json!({}));
+    assert_eq!(r["changed"], json!(unread_here + 1));
+    assert_eq!(s.rows().iter().map(|row| row.unread).sum::<usize>(), 0);
+    // Mail outside the Inboxes is left as it was.
+    assert!(!s.mailbox.message(in_sent).unwrap().read);
+}
+
+#[test]
+fn choosing_a_folder_leaves_the_unified_view() {
+    let mut s = session();
+    with_second_account(&mut s);
+    run(&mut s, "folder.select", json!({"unified": "inbox"}));
+    run(&mut s, "folder.select", json!({"kind": "sent"}));
+    assert!(s.view.unified.is_none());
+    assert_eq!(s.view.folder, kind(&s, FolderKind::Sent));
+    // And Empty Folder waits for one folder while a Unified view is on.
+    run(&mut s, "folder.select", json!({"unified": "inbox"}));
+    let empty = s.registry.get("folder.empty").unwrap();
+    assert!((empty.enabled)(&s).is_some());
+}

@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("mail.markUnread", "Mark as Unread", "Home › Tags", mark_unread).key("Mod+U").params(IDS).selection(needs_message),
         CommandSpec::new("mail.toggleRead", "Unread/ Read", "Home › Tags", toggle_read).params(IDS).selection(needs_message),
         CommandSpec::new("mail.markAllRead", "Mark All as Read", "Folder › Clean Up", mark_all_read)
-            .params(r#"{"folder"?: number} (default: the folder in view)"#),
+            .params(r#"{"folder"?: number} (default: the folder in view; in a Unified view, every account's folder of its kind)"#),
         CommandSpec::new("mail.flag", "Follow Up", "Home › Tags", flag)
             .key("Insert")
             .params(r#"{"due"?: "YYYY-MM-DD", "ids"?: [number]}"#)
@@ -109,8 +109,10 @@ fn select(s: &mut Session, v: &Value) -> CmdResult {
         s.sel.messages = ids;
     }
     // Follow the message to its folder (a search result, a conversation member elsewhere).
+    // In a Unified view the message is in view where it is: the merged list stays.
     if let Some(m) = s.sel.focus().and_then(|id| s.mailbox.message(id))
         && s.view.search.is_empty()
+        && s.view.unified.is_none()
         && m.folder != s.view.folder
     {
         s.view.folder = m.folder;
@@ -316,11 +318,24 @@ fn toggle_read(s: &mut Session, v: &Value) -> CmdResult {
 }
 
 fn mark_all_read(s: &mut Session, v: &Value) -> CmdResult {
-    let folder = p::id(v, "folder").unwrap_or(s.view.folder);
-    if s.mailbox.folder(folder).is_none() {
-        return Err(failed!("no folder with id {id}", id = folder));
-    }
-    let ids: Vec<Id> = s.mailbox.messages_in(folder).filter(|m| !m.read).map(|m| m.id).collect();
+    // In a Unified view, with no folder named, every account's folder of its kind is marked.
+    let folders: Vec<Id> = match (p::id(v, "folder"), s.view.unified) {
+        (Some(folder), _) => {
+            if s.mailbox.folder(folder).is_none() {
+                return Err(failed!("no folder with id {id}", id = folder));
+            }
+            vec![folder]
+        }
+        (None, Some(kind)) => crate::list::unified_folders(&s.mailbox, kind),
+        (None, None) => {
+            let folder = s.view.folder;
+            if s.mailbox.folder(folder).is_none() {
+                return Err(failed!("no folder with id {id}", id = folder));
+            }
+            vec![folder]
+        }
+    };
+    let ids: Vec<Id> = folders.iter().flat_map(|f| s.mailbox.messages_in(*f).filter(|m| !m.read).map(|m| m.id)).collect();
     for id in &ids {
         s.mailbox.message_mut(*id)?.read = true;
     }

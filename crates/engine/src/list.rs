@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use mailcraft_model::Mailbox;
 use mailcraft_model::search::Query;
 use mailcraft_model::{FlagStatus, FolderKind, Id, Importance, Message};
 use mailcraft_time::{DateGroup, Timestamp};
@@ -66,8 +67,17 @@ pub fn rows(s: &Session) -> Vec<Row> {
     rows_with(s, &HashMap::new(), &HashMap::new())
 }
 
-/// Which messages the list looks at: those of the folder in view, or, for a search of every
-/// mailbox, every message but those in Deleted Items, Junk E-mail and their subfolders.
+/// Every account's own folder of `kind`, in the pane's account order: what one row of the
+/// Unified section shows. A shared mailbox's folders stay out — their mail is the shared
+/// address's, read alongside the owner's, not among it (as its unread counts are its own in
+/// `folder.list`).
+pub fn unified_folders(mb: &Mailbox, kind: FolderKind) -> Vec<Id> {
+    mb.accounts_in_order().iter().filter(|a| !a.is_shared()).filter_map(|a| mb.folder_of_kind(a.id, kind)).collect()
+}
+
+/// Which messages the list looks at: those of the folder in view; for a Unified view, those of
+/// every account's folder of its kind; or, for a search of every mailbox, every message but
+/// those in Deleted Items, Junk E-mail and their subfolders.
 pub(crate) fn in_view(s: &Session) -> impl Fn(&Message) -> bool + '_ {
     let mb = &s.mailbox;
     let everywhere = !Query::parse(&s.view.search).is_empty() && s.view.scope == Scope::Everywhere;
@@ -77,8 +87,13 @@ pub(crate) fn in_view(s: &Session) -> impl Fn(&Message) -> bool + '_ {
     } else {
         Default::default()
     };
+    let unified: Option<Vec<Id>> = s.view.unified.filter(|_| !everywhere).map(|kind| unified_folders(mb, kind));
     let folder = s.view.folder;
-    move |m: &Message| if everywhere { !hidden.contains(&m.folder) } else { m.folder == folder }
+    move |m: &Message| match (&unified, everywhere) {
+        (_, true) => !hidden.contains(&m.folder),
+        (Some(folders), _) => folders.contains(&m.folder),
+        (None, _) => m.folder == folder,
+    }
 }
 
 /// [`rows`], for a search answered in part already: `decided` says whether each message the word

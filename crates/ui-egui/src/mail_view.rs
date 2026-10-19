@@ -386,6 +386,8 @@ fn search_bar(app: &mut MailApp, ui: &mut Ui, found: usize) {
     let t = Tokens::get(ui.ctx());
     let scope = if app.session.view.scope == mailcraft_engine::Scope::Everywhere {
         tl!("All Mailboxes").to_string()
+    } else if let Some(kind) = app.session.view.unified {
+        crate::i18n::fmt(tl!("{folder} - {mailbox}"), &[("folder", kind.default_name()), ("mailbox", tl!("Unified"))])
     } else {
         // (A shared mailbox's folder with the mailbox it is in, #70.)
         app.session.mailbox.folder(app.session.view.folder).map(|f| crate::nav::folder_label(&app.session.mailbox, f)).unwrap_or_default()
@@ -836,7 +838,14 @@ fn message_row(app: &mut MailApp, ui: &mut Ui, row: &Row, rect: Rect) {
         let w = paint_clipped(p, pos2(left, line1), (who_end - left).max(0.0), tl!("[Draft]"), regular(SENDER_TEXT), t.red);
         who_x += w + 5.0;
     }
-    paint_clipped(p, pos2(who_x, line1), (who_end - who_x).max(0.0), &who, who_font, if overdue { t.overdue } else { t.text });
+    let who_w = paint_clipped(p, pos2(who_x, line1), (who_end - who_x).max(0.0), &who, who_font, if overdue { t.overdue } else { t.text });
+    // In a Unified view each row says which account's folder it is in, quietly, after the sender.
+    if app.session.view.unified.is_some()
+        && let Some(account) = app.session.mailbox.account(m.account).filter(|a| !a.name.trim().is_empty())
+    {
+        let ax = who_x + who_w + 8.0;
+        paint_clipped(p, pos2(ax, line1), (who_end - ax).max(0.0), account.name.trim(), regular(LIST_TEXT), t.text_dim);
+    }
 
     // The subject's line, with the time at its end.
     let date =

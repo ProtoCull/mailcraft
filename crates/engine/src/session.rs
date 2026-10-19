@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mailcraft_model::{Attachment, ContentRef, Id, Importance, Mailbox, Message, RichBody};
+use mailcraft_model::{Attachment, ContentRef, FolderKind, Id, Importance, Mailbox, Message, RichBody};
 use mailcraft_time::{Date, DateTime, Timestamp, Weekday, Zone};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -217,6 +217,11 @@ pub struct ViewState {
     pub module: Module,
     /// The mail folder in view.
     pub folder: Id,
+    /// The list shows every account's folder of this kind merged (the Unified section: Inbox,
+    /// Drafts, Sent Items…). `folder` stays a real folder of that kind (the default account's)
+    /// for everything that wants one: where a new folder goes, which account a new message is
+    /// from, and the view to come back to.
+    pub unified: Option<FolderKind>,
     pub sort: SortBy,
     /// Newest (largest, Z) first.
     pub sort_descending: bool,
@@ -251,6 +256,7 @@ impl Default for ViewState {
         ViewState {
             module: Module::Mail,
             folder: 0,
+            unified: None,
             sort: SortBy::Date,
             sort_descending: true,
             conversations: false,
@@ -450,6 +456,11 @@ pub struct Prefs {
     /// owner turns it on: the server's list is shown where there is one.
     #[serde(skip_serializing_if = "is_false")]
     pub own_favorites: bool,
+    /// The folder pane leaves the Favorites section out (`file.options`, `hideFavorites`):
+    /// for an owner who works from the Unified section instead. Off unless the owner turns
+    /// it on.
+    #[serde(skip_serializing_if = "is_false")]
+    pub hide_favorites: bool,
     /// The time zone the calendar is shown in, by name (`Europe/Berlin`; `view.timeZone`).
     /// Empty: this computer's own, followed when it changes.
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -492,6 +503,7 @@ impl Default for Prefs {
             own_work_hours: false,
             mailbox_hours: None,
             own_favorites: false,
+            hide_favorites: false,
             time_zone: String::new(),
             second_zone: String::new(),
             zone_label: String::new(),
