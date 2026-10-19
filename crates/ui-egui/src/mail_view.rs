@@ -61,8 +61,10 @@ const TIME_RIGHT: f32 = 24.0;
 /// starts: every row's text stops at the same place, whatever its time.
 const TEXT_RIGHT: f32 = 98.0;
 /// Where a quick action (delete, flag) on the row under the pointer takes a click.
-const QUICK_TARGET: egui::Vec2 = egui::vec2(28.0, 22.0);
-/// The clear space between the quick actions, and between them and the marks before them.
+const QUICK_TARGET: egui::Vec2 = egui::vec2(28.0, 16.0);
+/// The clear space between a quick action and what is on the line beside it: the marks before
+/// the flag, the time before delete. Short enough, with the targets' height, that the two don't
+/// run into each other between the lines.
 const QUICK_GAP: f32 = 6.0;
 /// The middle of the sender's capitals, from a row's top: they stand 15 below the line above.
 const SENDER_Y: f32 = 21.0;
@@ -714,14 +716,14 @@ fn message_row(app: &mut MailApp, ui: &mut Ui, row: &Row, rect: Rect) {
     app.hit.add("messageRead", row.id, strip);
     let line1 = rect.min.y + SENDER_Y;
     let line2 = rect.min.y + SUBJECT_Y;
-    // Quick actions on the row under the pointer, at the right of the sender's line: flag (where
-    // a flagged message wears its flag) and delete. Like the read switch they sit on top of the
-    // row and leave the selection alone.
+    // Quick actions on the row under the pointer, as Outlook places them: the flag at the right
+    // of the sender's line (where a flagged message wears its flag), and delete at the right of
+    // the subject's line, past the time, which moves in to make room. Like the read switch they
+    // sit on top of the row and leave the selection alone.
     let over = ui.rect_contains_pointer(rect) && egui::DragAndDrop::payload::<MessageDrag>(ui.ctx()).is_none();
-    // Wide enough to hit without aiming, a gap between them, and short enough to stay off the
-    // time on the subject's line.
+    // Wide enough to hit without aiming, and a gap between a quick action and what is beside it.
     let flag_rect = Rect::from_center_size(pos2(rect.max.x - QUICK_TARGET.x / 2.0, line1), QUICK_TARGET);
-    let delete_rect = flag_rect.translate(vec2(-(QUICK_TARGET.x + QUICK_GAP), 0.0));
+    let delete_rect = Rect::from_center_size(pos2(rect.max.x - QUICK_TARGET.x / 2.0, line2), QUICK_TARGET);
     let flagged = m.flag == FlagStatus::Flagged;
     let quick = over.then(|| {
         let delete = ui.interact(delete_rect, ui.id().with(("msg_delete", row.id)), Sense::click()).on_hover_text(tl!("Delete"));
@@ -796,8 +798,8 @@ fn message_row(app: &mut MailApp, ui: &mut Ui, row: &Row, rect: Rect) {
             }
             icons::paint(p, Rect::from_center_size(at.center(), vec2(16.0, 16.0)), icon, color, t.accent);
         }
-        // The marks keep clear of delete, so a click meant for the row doesn't land on it.
-        x = delete_rect.min.x - QUICK_GAP;
+        // The marks keep clear of the flag, so a click meant for the row doesn't land on it.
+        x = flag_rect.min.x - QUICK_GAP;
     } else {
         let flag = Rect::from_center_size(flag_rect.center(), vec2(12.0, 12.0));
         match m.flag {
@@ -855,15 +857,17 @@ fn message_row(app: &mut MailApp, ui: &mut Ui, row: &Row, rect: Rect) {
         (true, true) => (semibold(LIST_TEXT), t.overdue),
         (false, _) => (regular(LIST_TEXT), if overdue { t.overdue } else { t.text }),
     };
-    let date_w = p.text(pos2(time_end, line2), Align2::RIGHT_CENTER, &date, date_font, date_color).width();
-    let mut subject_end = text_end.min(time_end - date_w - 8.0);
+    // While the pointer is over the row, delete takes the end of the line and the time moves in.
+    let date_end = if quick.is_some() { delete_rect.min.x - QUICK_GAP } else { time_end };
+    let date_w = p.text(pos2(date_end, line2), Align2::RIGHT_CENTER, &date, date_font, date_color).width();
+    let mut subject_end = text_end.min(date_end - date_w - 8.0);
 
     // In a search of every mailbox the folder it is in, then category marks and the size of a
     // conversation: at the right of the preview's first line, under the time, or before the time
     // when no preview is shown.
     let lines = app.session.prefs.preview_lines.min(3);
     let preview_y = rect.min.y + PREVIEW_TOP + PREVIEW_PITCH / 2.0 + 0.5;
-    let (mut sx, tail_y) = if lines > 0 { (time_end, preview_y) } else { (time_end - date_w - 8.0, line2) };
+    let (mut sx, tail_y) = if lines > 0 { (time_end, preview_y) } else { (date_end - date_w - 8.0, line2) };
     if let Some(folder) = shows_folder(&app.session).then(|| app.session.mailbox.folder(m.folder)).flatten() {
         let label = crate::nav::result_folder_label(&app.session.mailbox, folder);
         sx = paint_result_folder(p, pos2(sx, tail_y), &label, &t) - 6.0;
@@ -1152,7 +1156,8 @@ mod tests {
 
     /// The parts of a row a script (or a hand) can reach are where the row shows them: the row
     /// itself from the list's edge to the scroll bar's lane, the read switch down its left edge,
-    /// and flag and delete at the right of the sender's line while the pointer is over it.
+    /// and, while the pointer is over it, the flag at the right of the sender's line and delete
+    /// at the right of the subject's, where Outlook keeps them.
     #[test]
     fn the_parts_of_a_row_are_where_it_shows_them() {
         let mut harness = window(app(), (1280.0, 800.0));
@@ -1171,16 +1176,16 @@ mod tests {
 
         hover(&mut harness, rect.center());
         let (flag, delete) = (at(&harness, "messageFlag", row.id), at(&harness, "messageDelete", row.id));
-        // The flag is in its own column at the row's end, delete before it, both on the sender's line.
+        // The flag is in its own column at the row's end on the sender's line; delete under it at
+        // the end of the subject's line, past the time.
         assert!(flag.max.x <= rect.max.x && (flag.center().y - (rect.min.y + SENDER_Y)).abs() < 0.01);
-        assert_eq!(delete.center().y, flag.center().y);
-        assert!(delete.max.x <= flag.min.x && delete.min.x > rect.max.x - TEXT_RIGHT, "the buttons keep out of the text's column");
+        assert!(delete.max.x <= rect.max.x && (delete.center().y - (rect.min.y + SUBJECT_Y)).abs() < 0.01);
+        assert!(delete.min.x > rect.max.x - TEXT_RIGHT, "the buttons keep out of the text's column");
         // Big enough to hit without aiming, and apart, so a click meant for one doesn't take the other.
         for b in [flag, delete] {
-            assert!(b.width() >= 28.0 && b.height() >= 22.0, "{b:?}");
+            assert!(b.width() >= 28.0 && b.height() >= 16.0, "{b:?}");
         }
-        assert!(flag.min.x - delete.max.x >= 6.0);
-        assert!(flag.max.y < rect.min.y + SUBJECT_Y - 4.0, "and off the subject's line, where the time is");
+        assert!(delete.min.y >= flag.max.y, "stacked, not overlapping into one target");
 
         // They do what they say, and the selection stays where it was.
         let selected = harness.state().session.sel.messages.clone();
