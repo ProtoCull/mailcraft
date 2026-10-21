@@ -4109,8 +4109,8 @@ msgstr ""
 "Alle als gelesen\n"
 "markieren"
 
-#. command label
-#: crates/engine/src/cmd/mail.rs
+#. command label, interface
+#: crates/engine/src/cmd/mail.rs crates/ui-egui/src/nav.rs
 #, fuzzy
 msgid "Mark All as Read"
 msgstr "Alle als gelesen markieren"
@@ -7066,6 +7066,11 @@ msgid "Show the Favorites from Outlook in the folder pane"
 msgstr "Favoriten aus Outlook im Ordnerbereich anzeigen"
 
 #. interface
+#: crates/ui-egui/src/backstage.rs
+msgid "Show the Favorites section in the folder pane"
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/calendar_view.rs
 #, fuzzy
 msgid "Show the calendars of this group"
@@ -8873,6 +8878,11 @@ msgstr "Eingabe rückgängig"
 msgid "Undo {what}"
 msgstr "{what} rückgängig machen"
 
+#. interface
+#: crates/ui-egui/src/lib.rs crates/ui-egui/src/mail_view.rs crates/ui-egui/src/nav.rs
+msgid "Unified"
+msgstr ""
+
 #. name
 #: crates/engine/src/session.rs
 #, fuzzy
@@ -9212,6 +9222,11 @@ msgstr "Breite"
 #, fuzzy
 msgid "Window"
 msgstr "Fenster"
+
+#. interface
+#: crates/ui-egui/src/backstage.rs
+msgid "Without it, the pane starts at the Unified section (with two accounts or more) and the accounts."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/calendar_view.rs
@@ -9738,6 +9753,11 @@ msgstr "Gesendete Elemente"
 #, fuzzy
 msgid "folders are nested too deeply"
 msgstr "Ordner sind zu tief verschachtelt"
+
+#. why a command can't run
+#: crates/engine/src/cmd/folder.rs
+msgid "go to one folder to empty it"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/reminders.rs
@@ -10776,7 +10796,7 @@ msgid "{done} of {total}"
 msgstr "{done} von {total}"
 
 #. interface
-#: crates/ui-egui/src/lib.rs crates/ui-egui/src/nav.rs
+#: crates/ui-egui/src/lib.rs crates/ui-egui/src/mail_view.rs crates/ui-egui/src/nav.rs
 #, fuzzy
 msgid "{folder} - {mailbox}"
 msgstr "{folder} - {mailbox}"

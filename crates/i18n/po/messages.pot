@@ -3405,8 +3405,8 @@ msgid ""
 "as Read"
 msgstr ""
 
-#. command label
-#: crates/engine/src/cmd/mail.rs
+#. command label, interface
+#: crates/engine/src/cmd/mail.rs crates/ui-egui/src/nav.rs
 msgid "Mark All as Read"
 msgstr ""
 
@@ -5843,6 +5843,11 @@ msgid "Show the Favorites from Outlook in the folder pane"
 msgstr ""
 
 #. interface
+#: crates/ui-egui/src/backstage.rs
+msgid "Show the Favorites section in the folder pane"
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/calendar_view.rs
 msgid "Show the calendars of this group"
 msgstr ""
@@ -7349,6 +7354,11 @@ msgstr ""
 msgid "Undo {what}"
 msgstr ""
 
+#. interface
+#: crates/ui-egui/src/lib.rs crates/ui-egui/src/mail_view.rs crates/ui-egui/src/nav.rs
+msgid "Unified"
+msgstr ""
+
 #. name
 #: crates/engine/src/session.rs
 msgid "Unread"
@@ -7629,6 +7639,11 @@ msgstr ""
 #. ribbon, ribbon location
 #: crates/engine/src/cmd/view.rs crates/ui-egui/src/lib.rs crates/ui-egui/src/ribbon.rs
 msgid "Window"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/backstage.rs
+msgid "Without it, the pane starts at the Unified section (with two accounts or more) and the accounts."
 msgstr ""
 
 #. interface
@@ -8069,6 +8084,11 @@ msgstr ""
 #. what a command says
 #: crates/model/src/mailbox.rs
 msgid "folders are nested too deeply"
+msgstr ""
+
+#. why a command can't run
+#: crates/engine/src/cmd/folder.rs
+msgid "go to one folder to empty it"
 msgstr ""
 
 #. interface
@@ -8936,7 +8956,7 @@ msgid "{done} of {total}"
 msgstr ""
 
 #. interface
-#: crates/ui-egui/src/lib.rs crates/ui-egui/src/nav.rs
+#: crates/ui-egui/src/lib.rs crates/ui-egui/src/mail_view.rs crates/ui-egui/src/nav.rs
 msgid "{folder} - {mailbox}"
 msgstr ""
 

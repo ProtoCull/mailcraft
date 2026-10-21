@@ -4113,8 +4113,8 @@ msgstr ""
 "Segna tutti\n"
 "come letti"
 
-#. command label
-#: crates/engine/src/cmd/mail.rs
+#. command label, interface
+#: crates/engine/src/cmd/mail.rs crates/ui-egui/src/nav.rs
 #, fuzzy
 msgid "Mark All as Read"
 msgstr "Segna tutti come letti"
@@ -7078,6 +7078,11 @@ msgid "Show the Favorites from Outlook in the folder pane"
 msgstr "Mostra i Preferiti di Outlook nel riquadro delle cartelle"
 
 #. interface
+#: crates/ui-egui/src/backstage.rs
+msgid "Show the Favorites section in the folder pane"
+msgstr ""
+
+#. interface
 #: crates/ui-egui/src/calendar_view.rs
 #, fuzzy
 msgid "Show the calendars of this group"
@@ -8887,6 +8892,11 @@ msgstr "Annulla digitazione"
 msgid "Undo {what}"
 msgstr "Annulla {what}"
 
+#. interface
+#: crates/ui-egui/src/lib.rs crates/ui-egui/src/mail_view.rs crates/ui-egui/src/nav.rs
+msgid "Unified"
+msgstr ""
+
 #. name
 #: crates/engine/src/session.rs
 #, fuzzy
@@ -9226,6 +9236,11 @@ msgstr "Larghezza"
 #, fuzzy
 msgid "Window"
 msgstr "Finestra"
+
+#. interface
+#: crates/ui-egui/src/backstage.rs
+msgid "Without it, the pane starts at the Unified section (with two accounts or more) and the accounts."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/calendar_view.rs
@@ -9754,6 +9769,11 @@ msgstr "Posta inviata"
 #, fuzzy
 msgid "folders are nested too deeply"
 msgstr "le cartelle sono annidate troppo in profondità"
+
+#. why a command can't run
+#: crates/engine/src/cmd/folder.rs
+msgid "go to one folder to empty it"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/reminders.rs
@@ -10792,7 +10812,7 @@ msgid "{done} of {total}"
 msgstr "{done} di {total}"
 
 #. interface
-#: crates/ui-egui/src/lib.rs crates/ui-egui/src/nav.rs
+#: crates/ui-egui/src/lib.rs crates/ui-egui/src/mail_view.rs crates/ui-egui/src/nav.rs
 #, fuzzy
 msgid "{folder} - {mailbox}"
 msgstr "{folder} - {mailbox}"
