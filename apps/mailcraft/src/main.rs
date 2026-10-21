@@ -1415,6 +1415,12 @@ fn main() -> eframe::Result {
             // mailbox kept in a file, which is where the copy from before the switch goes.
             app.offer_graph_switch = kept && !sample;
             load_prefs(&mut app);
+            // A run starts in the Unified Inbox when the mailbox merges several accounts (the
+            // Unified section's own rule); with one account there is nothing to merge, and the
+            // account's Inbox stays the start.
+            if app.session.mailbox.accounts.iter().filter(|a| !a.is_shared()).count() >= 2 {
+                let _ = app.session.run("folder.select", &serde_json::json!({"allInboxes": true}));
+            }
             app.ui.window = restored;
             app.integrated_titlebar = cfg!(target_os = "macos");
             let mut key_file = None;
